@@ -5,15 +5,11 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
-  doc,
-  getCountFromServer,
-  getDoc,
   getDocs,
   limit,
   orderBy,
   query,
   startAt,
-  setDoc,
   updateDoc,
   where
 } from "firebase/firestore";
@@ -30,11 +26,6 @@ type MetadataResult = {
 type ViewLink = LinkDoc & { id: string };
 
 const linksCollection = collection(db, "links");
-const usersCollection = collection(db, "users");
-
-function normalizeNickname(name: string) {
-  return name.trim().toLowerCase();
-}
 
 function JoinScreen({
   onJoin
@@ -42,63 +33,44 @@ function JoinScreen({
   onJoin: (nickname: string) => void;
 }) {
   const [nickname, setNickname] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const canSubmit = nickname.trim().length > 0 && nickname.trim().length <= 10;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!canSubmit || busy) return;
-    setBusy(true);
+    if (!canSubmit) return;
     setError("");
 
     const raw = nickname.trim();
-    const key = normalizeNickname(raw);
-    const targetRef = doc(usersCollection, key);
-
-    try {
-      const snap = await getDoc(targetRef);
-      if (snap.exists()) {
-        setError("이미 사용 중인 닉네임입니다.");
-        return;
-      }
-
-      await setDoc(targetRef, {
-        nickname: raw,
-        nicknameLower: key,
-        createdAt: Date.now()
-      });
-
-      localStorage.setItem("lb_nickname", raw);
-      onJoin(raw);
-    } finally {
-      setBusy(false);
-    }
+    // 무료 플랜 절약 모드: 닉네임 중복 체크를 위해 DB를 읽지 않습니다.
+    // 닉네임은 로컬 저장소에만 보관합니다.
+    localStorage.setItem("lb_nickname", raw);
+    onJoin(raw);
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
+    <main className="flex min-h-screen items-center justify-center bg-white px-6">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-[420px] rounded-2xl bg-transparent text-center"
+        className="w-full max-w-[420px] rounded-2xl bg-white text-center"
       >
-        <h1 className="text-[32px] font-extrabold tracking-[-0.02em] text-[#2b2c31]">에이블리 링크 보드</h1>
-        <p className="mt-3 text-sm text-[#8d8f9a]">닉네임을 설정하고 시작하세요.</p>
-        <p className="text-sm text-[#8d8f9a]">한 번 설정하면 다른 사람이 써요</p>
+        <h1 className="text-[30px] font-extrabold tracking-[-0.02em] text-[#1f2430]">에이블리 링크 보드</h1>
+        <p className="mt-3 text-sm text-[#7c8394]">닉네임을 설정하고 시작하세요.</p>
+        <p className="text-sm text-[#7c8394]">무료 플랜 절약 모드가 적용되어요</p>
         <input
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
           maxLength={10}
           placeholder="닉네임 입력 (최대 10자)"
-          className="mt-7 h-12 w-full rounded-xl border border-[#e3e4ea] bg-[#f6f6f8] px-4 text-sm outline-none focus:border-[#d6d8e1]"
+          className="mt-7 h-12 w-full rounded-xl border border-[#e7e9ee] bg-[#fbfbfd] px-4 text-sm outline-none focus:border-[#cfd6e6]"
         />
         {error ? <p className="mt-2 text-left text-xs text-[#ff4f5a]">{error}</p> : null}
         <button
-          disabled={!canSubmit || busy}
+          disabled={!canSubmit}
           className="mt-6 h-12 w-full rounded-xl bg-[#ff5a67] text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy ? "확인 중..." : "시작하기"}
+          시작하기
         </button>
       </form>
     </main>
@@ -177,41 +149,48 @@ function MainScreen({
   nickname: string;
   onResetNickname: () => void;
 }) {
-  const [queueCount, setQueueCount] = useState(0);
+  const [hasPending, setHasPending] = useState<boolean | null>(null);
   const [urlInput, setUrlInput] = useState("");
   const [sending, setSending] = useState(false);
   const [fetchingRandom, setFetchingRandom] = useState(false);
   const [message, setMessage] = useState("");
   const [currentLink, setCurrentLink] = useState<ViewLink | null>(null);
   const [showHowTo, setShowHowTo] = useState(false);
-  const lastCountFetchAt = useRef<number>(0);
+  const didInitialRead = useRef(false);
 
   useEffect(() => {
-    let alive = true;
+    // 무료 플랜 절약 모드:
+    // - Firestore 읽기는 "최초 로드 1회"만 허용
+    // - limit(1)로 1개만 읽어 "대기 링크가 있는지"만 확인
+    if (didInitialRead.current) return;
+    didInitialRead.current = true;
 
-    async function refreshQueueCount(force = false) {
-      const now = Date.now();
-      if (!force && now - lastCountFetchAt.current < 5000) return; // burst 방지(5초)
-      lastCountFetchAt.current = now;
-
+    (async () => {
       try {
-        const q = query(linksCollection, where("status", "==", "pending"));
-        const snap = await getCountFromServer(q);
-        if (!alive) return;
-        setQueueCount(snap.data().count);
+        const pivot = Math.random();
+        const base = query(
+          linksCollection,
+          where("status", "==", "pending"),
+          orderBy("rand"),
+          startAt(pivot),
+          limit(1)
+        );
+        let snap = await getDocs(base);
+        if (snap.empty) {
+          const fallback = query(
+            linksCollection,
+            where("status", "==", "pending"),
+            orderBy("rand"),
+            limit(1)
+          );
+          snap = await getDocs(fallback);
+        }
+
+        setHasPending(!snap.empty);
       } catch {
-        // 429 등 에러가 나면 조용히 유지 (무한 재시도 금지)
+        setHasPending(null);
       }
-    }
-
-    // 최초 1회 + 이후 30초마다 갱신(실시간 구독 대신, 읽기 폭주 방지)
-    refreshQueueCount(true);
-    const timer = setInterval(() => refreshQueueCount(false), 30000);
-
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
+    })();
   }, []);
 
   useEffect(() => {
@@ -219,20 +198,11 @@ function MainScreen({
     if (!hidden) setShowHowTo(true);
   }, []);
 
-  const queueLabel = useMemo(() => `${queueCount}개 링크 대기 중`, [queueCount]);
-
-  async function refreshQueueCount(force = false) {
-    const now = Date.now();
-    if (!force && now - lastCountFetchAt.current < 5000) return;
-    lastCountFetchAt.current = now;
-    try {
-      const q = query(linksCollection, where("status", "==", "pending"));
-      const snap = await getCountFromServer(q);
-      setQueueCount(snap.data().count);
-    } catch {
-      // ignore
-    }
-  }
+  const queueLabel = useMemo(() => {
+    if (hasPending === null) return "대기 링크 상태 확인 불가";
+    if (hasPending === false) return "대기 중인 링크가 없어요";
+    return "대기 중인 링크가 있어요";
+  }, [hasPending]);
 
   async function handleSubmitLink(e: FormEvent) {
     e.preventDefault();
@@ -263,7 +233,8 @@ function MainScreen({
 
       setUrlInput("");
       setMessage("링크를 성공적으로 등록했어요.");
-      void refreshQueueCount(true);
+      // 비용 절약: 업로드 후 대기 상태 재조회(읽기)는 하지 않습니다.
+      setHasPending(true);
     } catch {
       setMessage("등록 중 오류가 발생했습니다.");
     } finally {
@@ -277,13 +248,26 @@ function MainScreen({
     setMessage("");
 
     try {
-      // pending 전체를 읽지 않고, "rand" 정렬로 1개만 읽어서 랜덤 추출
+      // 무료 플랜 절약 모드:
+      // - Firestore 읽기는 "버튼 클릭 1회"에만 발생
+      // - limit(1)로 1개만 읽어 랜덤 링크 1개만 가져옴
       const pivot = Math.random();
-      const base = query(linksCollection, where("status", "==", "pending"), orderBy("rand"), startAt(pivot), limit(1));
+      const base = query(
+        linksCollection,
+        where("status", "==", "pending"),
+        orderBy("rand"),
+        startAt(pivot),
+        limit(1)
+      );
       let snap = await getDocs(base);
 
       if (snap.empty) {
-        const fallback = query(linksCollection, where("status", "==", "pending"), orderBy("rand"), limit(1));
+        const fallback = query(
+          linksCollection,
+          where("status", "==", "pending"),
+          orderBy("rand"),
+          limit(1)
+        );
         snap = await getDocs(fallback);
       }
 
@@ -291,6 +275,7 @@ function MainScreen({
       if (!docs.length) {
         setCurrentLink(null);
         setMessage("대기 중인 링크가 없습니다.");
+        setHasPending(false);
         return;
       }
 
@@ -301,7 +286,8 @@ function MainScreen({
 
       setCurrentLink({ id: chosen.id, ...data });
       setMessage("랜덤 링크를 가져왔어요.");
-      void refreshQueueCount(true);
+      // 비용 절약: 다음 대기 상태는 즉시 재조회하지 않음
+      setHasPending(null);
     } catch {
       setMessage("다음 링크를 가져오지 못했습니다.");
     } finally {
@@ -310,10 +296,10 @@ function MainScreen({
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7]">
+    <main className="min-h-screen bg-white">
       <div className="mx-auto w-full max-w-[980px] px-4 py-6">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-[#282a31]">에이블리 링크 보드</h1>
+          <h1 className="text-lg font-bold text-[#1f2430]">에이블리 링크 보드</h1>
           <div className="flex items-center gap-3 text-xs text-[#777b8c]">
             <span>{nickname}님</span>
             <button onClick={onResetNickname} className="rounded-md border px-2 py-1">
@@ -322,26 +308,17 @@ function MainScreen({
           </div>
         </header>
 
-        <section className="mt-4 rounded-xl border border-[#ececf1] bg-white p-3 text-center text-sm font-semibold text-[#f4606a]">
-          <div className="flex items-center justify-center gap-2">
-            <span>{queueLabel}</span>
-            <button
-              type="button"
-              onClick={() => refreshQueueCount(true)}
-              className="rounded-md border border-[#ececf1] bg-white px-2 py-1 text-xs font-semibold text-[#777b8c]"
-            >
-              새로고침
-            </button>
-          </div>
+        <section className="mt-4 rounded-xl border border-[#e7e9ee] bg-[#fbfbfd] p-3 text-center text-sm font-semibold text-[#ff5a67]">
+          {queueLabel}
         </section>
 
-        <form onSubmit={handleSubmitLink} className="mt-4 rounded-xl border border-[#ececf1] bg-white p-3">
-          <label className="text-xs font-semibold text-[#8f93a2]">링크 올리기</label>
+        <form onSubmit={handleSubmitLink} className="mt-4 rounded-xl border border-[#e7e9ee] bg-white p-3">
+          <label className="text-xs font-semibold text-[#7c8394]">링크 올리기</label>
           <input
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="여기에 링크를 붙여넣어 주세요"
-            className="mt-2 h-14 w-full rounded-xl border border-[#ededf3] bg-[#f8f8fb] px-4 text-sm outline-none"
+            className="mt-2 h-14 w-full rounded-xl border border-[#e7e9ee] bg-[#fbfbfd] px-4 text-sm outline-none focus:border-[#cfd6e6]"
           />
         </form>
 
@@ -357,14 +334,25 @@ function MainScreen({
           {currentLink ? (
             <LinkCard link={currentLink} />
           ) : (
-            <div className="rounded-xl border border-[#f0d9de] bg-[#fff6f8] py-10 text-center">
-              <p className="text-base font-semibold text-[#f05f6f]">여기에 랜덤 링크가 뜹니다</p>
-              <p className="mt-1 text-xs text-[#b1a2a7]">버튼을 눌러 랜덤 링크를 받아보세요.</p>
+            <div className="rounded-xl border border-[#e7e9ee] bg-[#fbfbfd] py-10 text-center">
+              <p className="text-base font-semibold text-[#1f2430]">여기에 랜덤 링크가 뜹니다</p>
+              <p className="mt-1 text-xs text-[#7c8394]">버튼을 눌러 랜덤 링크를 받아보세요.</p>
             </div>
           )}
         </div>
 
         {message ? <p className="mt-3 text-sm text-[#787d8e]">{message}</p> : null}
+
+        <div className="mt-10">
+          <a
+            href="https://open.kakao.com/o/s6VGm9Ig"
+            target="_blank"
+            rel="noreferrer"
+            className="block h-12 w-full rounded-xl border border-[#e7e9ee] bg-white text-center text-sm font-semibold leading-[48px] text-[#1f2430] hover:bg-[#fbfbfd]"
+          >
+            제작자에게 문의하기
+          </a>
+        </div>
       </div>
 
       {showHowTo ? (
