@@ -13,6 +13,7 @@ function unauthorized() {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Protect the admin route with browser-managed Basic Auth.
   // /admin 은 관리자만 접근 가능
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const user = process.env.ADMIN_BASIC_USER ?? "";
