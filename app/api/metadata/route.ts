@@ -1,5 +1,6 @@
 import { load } from "cheerio";
 import { NextRequest, NextResponse } from "next/server";
+import { isMaintenanceMode } from "@/lib/maintenance";
 
 function normalizeUrl(raw: string) {
   const value = raw.trim();
@@ -21,6 +22,15 @@ function pickMeta($: ReturnType<typeof load>, selectors: string[]) {
 }
 
 export async function GET(req: NextRequest) {
+  // 점검모드면 서버에서 즉시 차단(클라이언트 우회 방지)
+  const maintenance = await isMaintenanceMode({ ttlMs: 5000 });
+  if (maintenance) {
+    return NextResponse.json(
+      { error: "현재 점검 중입니다. 나중에 다시 오세요!" },
+      { status: 503, headers: { "Retry-After": "300" } }
+    );
+  }
+
   const urlParam = req.nextUrl.searchParams.get("url");
   const targetUrl = urlParam ? normalizeUrl(urlParam) : null;
 

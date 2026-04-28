@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import MaintenanceGate from "@/app/components/MaintenanceGate";
 
 export const metadata: Metadata = {
   title: "에이블리 링크 공유",
@@ -13,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <MaintenanceGate>{children}</MaintenanceGate>
+      </body>
     </html>
   );
 }
