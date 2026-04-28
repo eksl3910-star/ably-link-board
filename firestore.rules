@@ -1,12 +1,25 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isMaintenance() {
+      return get(/databases/$(database)/documents/settings/global).data.isMaintenance == true;
+    }
+
+    // 점검 플래그는 모두가 읽을 수 있어야 게이트가 동작함
+    match /settings/{docId} {
+      allow read: if docId == "global";
+      // 인증 없이 관리자 구분이 불가하므로(현재 구조상) 쓰기는 열어둡니다.
+      // 대신 아래 rules로 점검 중에는 전체 데이터 접근을 원천 차단합니다.
+      allow write: if docId == "global";
+    }
+
+    // 점검 중에는 모든 데이터 접근(읽기/쓰기) 차단
     match /users/{nickname} {
-      allow read, write: if true;
+      allow read, write: if !isMaintenance();
     }
 
     match /links/{linkId} {
-      allow read, write: if true;
+      allow read, write: if !isMaintenance();
     }
   }
 }

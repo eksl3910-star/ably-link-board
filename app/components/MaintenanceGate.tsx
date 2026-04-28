@@ -60,8 +60,8 @@ export default function MaintenanceGate({ children }: { children: ReactNode }) {
         sessionStorage.setItem("lb_maintenance_cache", JSON.stringify({ value, fetchedAt: Date.now() }));
       } catch {
         if (!alive) return;
-        // 읽기 실패 시에는 기본적으로 정상 진입(무한 차단 방지)
-        setMaintenance(false);
+        // 철벽 모드: 읽기 실패(429 포함)면 기본적으로 점검 중으로 처리(우회 진입 방지)
+        setMaintenance(true);
       } finally {
         if (!alive) return;
         setReady(true);
