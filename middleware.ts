@@ -14,7 +14,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // /admin 은 관리자만 접근 가능
-  if (pathname.startsWith("/admin")) {
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const user = process.env.ADMIN_BASIC_USER ?? "";
     const pass = process.env.ADMIN_BASIC_PASS ?? "";
 
@@ -44,6 +44,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"]
+  matcher: ["/admin", "/admin/:path*"]
 };
 
