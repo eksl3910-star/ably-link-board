@@ -1,15 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
-  onSnapshot,
+  limit,
+  orderBy,
   query,
+  startAt,
   setDoc,
   updateDoc,
   where
@@ -181,11 +184,34 @@ function MainScreen({
   const [message, setMessage] = useState("");
   const [currentLink, setCurrentLink] = useState<ViewLink | null>(null);
   const [showHowTo, setShowHowTo] = useState(false);
+  const lastCountFetchAt = useRef<number>(0);
 
   useEffect(() => {
-    const q = query(linksCollection, where("status", "==", "pending"));
-    const unsub = onSnapshot(q, (snap) => setQueueCount(snap.size));
-    return () => unsub();
+    let alive = true;
+
+    async function refreshQueueCount(force = false) {
+      const now = Date.now();
+      if (!force && now - lastCountFetchAt.current < 5000) return; // burst 방지(5초)
+      lastCountFetchAt.current = now;
+
+      try {
+        const q = query(linksCollection, where("status", "==", "pending"));
+        const snap = await getCountFromServer(q);
+        if (!alive) return;
+        setQueueCount(snap.data().count);
+      } catch {
+        // 429 등 에러가 나면 조용히 유지 (무한 재시도 금지)
+      }
+    }
+
+    // 최초 1회 + 이후 30초마다 갱신(실시간 구독 대신, 읽기 폭주 방지)
+    refreshQueueCount(true);
+    const timer = setInterval(() => refreshQueueCount(false), 30000);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -194,6 +220,19 @@ function MainScreen({
   }, []);
 
   const queueLabel = useMemo(() => `${queueCount}개 링크 대기 중`, [queueCount]);
+
+  async function refreshQueueCount(force = false) {
+    const now = Date.now();
+    if (!force && now - lastCountFetchAt.current < 5000) return;
+    lastCountFetchAt.current = now;
+    try {
+      const q = query(linksCollection, where("status", "==", "pending"));
+      const snap = await getCountFromServer(q);
+      setQueueCount(snap.data().count);
+    } catch {
+      // ignore
+    }
+  }
 
   async function handleSubmitLink(e: FormEvent) {
     e.preventDefault();
@@ -218,11 +257,13 @@ function MainScreen({
         domain: data.domain,
         status: "pending",
         createdBy: nickname,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        rand: Math.random()
       } as LinkDoc);
 
       setUrlInput("");
       setMessage("링크를 성공적으로 등록했어요.");
+      void refreshQueueCount(true);
     } catch {
       setMessage("등록 중 오류가 발생했습니다.");
     } finally {
@@ -236,23 +277,31 @@ function MainScreen({
     setMessage("");
 
     try {
-      const q = query(linksCollection, where("status", "==", "pending"));
-      const snap = await getDocs(q);
-      const docs = snap.docs;
+      // pending 전체를 읽지 않고, "rand" 정렬로 1개만 읽어서 랜덤 추출
+      const pivot = Math.random();
+      const base = query(linksCollection, where("status", "==", "pending"), orderBy("rand"), startAt(pivot), limit(1));
+      let snap = await getDocs(base);
 
+      if (snap.empty) {
+        const fallback = query(linksCollection, where("status", "==", "pending"), orderBy("rand"), limit(1));
+        snap = await getDocs(fallback);
+      }
+
+      const docs = snap.docs;
       if (!docs.length) {
         setCurrentLink(null);
         setMessage("대기 중인 링크가 없습니다.");
         return;
       }
 
-      const chosen = docs[Math.floor(Math.random() * docs.length)];
+      const chosen = docs[0];
       const data = chosen.data() as LinkDoc;
 
       await updateDoc(chosen.ref, { status: "consumed" });
 
       setCurrentLink({ id: chosen.id, ...data });
       setMessage("랜덤 링크를 가져왔어요.");
+      void refreshQueueCount(true);
     } catch {
       setMessage("다음 링크를 가져오지 못했습니다.");
     } finally {
@@ -274,7 +323,16 @@ function MainScreen({
         </header>
 
         <section className="mt-4 rounded-xl border border-[#ececf1] bg-white p-3 text-center text-sm font-semibold text-[#f4606a]">
-          {queueLabel}
+          <div className="flex items-center justify-center gap-2">
+            <span>{queueLabel}</span>
+            <button
+              type="button"
+              onClick={() => refreshQueueCount(true)}
+              className="rounded-md border border-[#ececf1] bg-white px-2 py-1 text-xs font-semibold text-[#777b8c]"
+            >
+              새로고침
+            </button>
+          </div>
         </section>
 
         <form onSubmit={handleSubmitLink} className="mt-4 rounded-xl border border-[#ececf1] bg-white p-3">

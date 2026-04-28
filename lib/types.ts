@@ -6,4 +6,5 @@ export type LinkDoc = {
   status: "pending" | "consumed";
   createdBy: string;
   createdAt: number;
+  rand: number;
 };

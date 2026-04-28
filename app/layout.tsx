@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "에이블리 링크 보드",
+  title: "에이블리 링크 공유",
   description: "에이블리 링크 보드 클론"
 };
 
