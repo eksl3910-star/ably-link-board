@@ -26,7 +26,8 @@ export function middleware(req: NextRequest) {
 
     try {
       const b64 = auth.slice("Basic ".length);
-      const decoded = Buffer.from(b64, "base64").toString("utf8");
+      // Middleware runs on the Edge Runtime on Vercel, so Node.js Buffer is unavailable.
+      const decoded = atob(b64);
       const idx = decoded.indexOf(":");
       if (idx < 0) return unauthorized();
 
