@@ -3,8 +3,8 @@ import "./globals.css";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 
 export const metadata: Metadata = {
-  title: "에이블리 링크 공유",
-  description: "에이블리 링크 보드 클론"
+  title: "토스 아이디 링크 공유",
+  description: "토스 아이디 링크 보드"
 };
 
 export default function RootLayout({

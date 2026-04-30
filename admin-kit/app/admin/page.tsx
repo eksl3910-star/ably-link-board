@@ -79,10 +79,6 @@ export default function AdminPage() {
       <div className="mx-auto w-full max-w-[560px] rounded-2xl border border-[#e7e9ee] bg-white p-6">
         <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-[#1f2430]">관리자</h1>
         <p className="mt-2 text-sm text-[#7c8394]">여기서 서버 점검 모드를 켜고 끌 수 있어요.</p>
-        <p className="mt-1 text-xs text-[#9aa3b2]">
-          이 페이지는 환경 변수 <code>ADMIN_BASIC_USER</code> / <code>ADMIN_BASIC_PASS</code>로 설정된 브라우저 Basic
-          Auth를 통과해야만 접근할 수 있어요.
-        </p>
 
         <div className="mt-6 rounded-xl border border-[#e7e9ee] bg-[#fbfbfd] p-4">
           <label className="mb-4 block">
@@ -133,7 +129,7 @@ export default function AdminPage() {
         </div>
 
         <p className="mt-6 text-xs text-[#7c8394]">
-          동작 원리: 관리자 API가 Firestore `settings/global` 문서를 서버에서만 갱신합니다.
+          동작 원리: 관리자 API가 Firestore <code>settings/global</code> 문서를 서버에서만 갱신합니다.
         </p>
       </div>
     </main>

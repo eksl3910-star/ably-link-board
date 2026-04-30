@@ -13,6 +13,15 @@ function normalizeUrl(raw: string) {
   }
 }
 
+function isAllowedTossUrl(targetUrl: string) {
+  try {
+    const parsed = new URL(targetUrl);
+    return parsed.hostname === "toss.me" || parsed.hostname.endsWith(".toss.me");
+  } catch {
+    return false;
+  }
+}
+
 function pickMeta($: ReturnType<typeof load>, selectors: string[]) {
   for (const selector of selectors) {
     const value = $(selector).attr("content")?.trim();
@@ -36,6 +45,9 @@ export async function GET(req: NextRequest) {
 
   if (!targetUrl) {
     return NextResponse.json({ error: "올바른 URL이 아닙니다." }, { status: 400 });
+  }
+  if (!isAllowedTossUrl(targetUrl)) {
+    return NextResponse.json({ error: "토스 링크(toss.me)만 허용됩니다." }, { status: 400 });
   }
 
   try {

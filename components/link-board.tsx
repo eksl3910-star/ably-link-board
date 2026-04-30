@@ -52,12 +52,21 @@ export default function LinkBoard() {
 
   const receiveWrapHidden = useMemo(() => isLinkDisplay, [isLinkDisplay]);
 
-  const extractAblyURL = (text: string) => {
+  const isTossUrl = (candidate: string) => {
+    try {
+      const parsed = new URL(candidate);
+      return parsed.hostname === "toss.me" || parsed.hostname.endsWith(".toss.me");
+    } catch {
+      return false;
+    }
+  };
+
+  const extractTossURL = (text: string) => {
     const matches = text.match(/https?:\/\/[^\s]+/g);
     if (!matches) return null;
     for (const match of matches) {
       const url = match.replace(/[.,)>\]]+$/, "");
-      if (url.startsWith("https://m.a-bly.com/events-subpage/")) return url;
+      if (isTossUrl(url)) return url;
     }
     return null;
   };
@@ -71,9 +80,9 @@ export default function LinkBoard() {
   };
 
   useEffect(() => {
-    const savedNick = localStorage.getItem("ably_nickname") || "";
-    const savedLastLink = localStorage.getItem("ably_last_link") || "";
-    const savedOwners = JSON.parse(localStorage.getItem("ably_received_owners") || "[]") as string[];
+    const savedNick = localStorage.getItem("toss_nickname") || "";
+    const savedLastLink = localStorage.getItem("toss_last_link") || "";
+    const savedOwners = JSON.parse(localStorage.getItem("toss_received_owners") || "[]") as string[];
 
     myLastLinkRef.current = savedLastLink;
     receivedOwnersRef.current = savedOwners;
@@ -89,11 +98,11 @@ export default function LinkBoard() {
         setMyNickname(savedNick);
         setNickInput(savedNick);
         setScreen("main");
-        if (!localStorage.getItem("ably_guide_done")) {
+        if (!localStorage.getItem("toss_guide_done")) {
           window.setTimeout(() => setShowGuide(true), 400);
         }
       } else {
-        localStorage.removeItem("ably_nickname");
+        localStorage.removeItem("toss_nickname");
         setScreen("nickname");
       }
     };
@@ -166,10 +175,10 @@ export default function LinkBoard() {
       return;
     }
 
-    localStorage.setItem("ably_nickname", value);
+    localStorage.setItem("toss_nickname", value);
     setMyNickname(value);
     setScreen("main");
-    if (!localStorage.getItem("ably_guide_done")) {
+    if (!localStorage.getItem("toss_guide_done")) {
       window.setTimeout(() => setShowGuide(true), 400);
     }
   };
@@ -198,7 +207,7 @@ export default function LinkBoard() {
   };
 
   const dontShowAgain = () => {
-    localStorage.setItem("ably_guide_done", "1");
+    localStorage.setItem("toss_guide_done", "1");
     setShowGuide(false);
   };
 
@@ -215,14 +224,14 @@ export default function LinkBoard() {
       return;
     }
 
-    const url = extractAblyURL(text);
+    const url = extractTossURL(text);
     if (!url) {
-      showAlert(setUploadAlert, "에이블리 링크(a-bly.com)를 찾을 수 없어요. 에이블리 링크를 먼저 복사해주세요.", "danger");
+      showAlert(setUploadAlert, "토스 링크(toss.me)를 찾을 수 없어요. 토스 링크를 먼저 복사해주세요.", "danger");
       return;
     }
 
     if (url === myLastLinkRef.current) {
-      showAlert(setUploadAlert, "이전에 올린 링크랑 같아요. 에이블리에서 새 링크를 만들어주세요!", "danger");
+      showAlert(setUploadAlert, "이전에 올린 링크랑 같아요. 토스에서 새 링크를 만들어주세요!", "danger");
       return;
     }
 
@@ -244,7 +253,7 @@ export default function LinkBoard() {
 
       myLastLinkRef.current = url;
       myCurrentLinkIdRef.current = created.id;
-      localStorage.setItem("ably_last_link", url);
+      localStorage.setItem("toss_last_link", url);
       setShowRequeue(true);
       showAlert(setUploadAlert, "링크가 올라갔어요! 🎉", "success");
       await refreshCount();
@@ -291,7 +300,7 @@ export default function LinkBoard() {
     if (currentId) {
       if (currentOwner) {
         receivedOwnersRef.current = receivedOwnersRef.current.filter((owner) => owner !== currentOwner);
-        localStorage.setItem("ably_received_owners", JSON.stringify(receivedOwnersRef.current));
+        localStorage.setItem("toss_received_owners", JSON.stringify(receivedOwnersRef.current));
       }
       await updateDoc(doc(db, "links", currentId), {
         status: "waiting",
@@ -374,7 +383,7 @@ export default function LinkBoard() {
     currentLinkOwnerRef.current = picked.owner;
     if (!receivedOwnersRef.current.includes(picked.owner)) {
       receivedOwnersRef.current.push(picked.owner);
-      localStorage.setItem("ably_received_owners", JSON.stringify(receivedOwnersRef.current));
+      localStorage.setItem("toss_received_owners", JSON.stringify(receivedOwnersRef.current));
     }
 
     showLinkDisplay(picked.url);
@@ -395,7 +404,7 @@ export default function LinkBoard() {
     <>
       <div id="app">
         <div id="nickname-screen" style={{ display: screen === "nickname" ? "flex" : "none" }}>
-          <h2>에이블리 링크 보드</h2>
+          <h2>토스 아이디 링크 보드</h2>
           <p>
             닉네임을 설정하고 시작해요
             <br />한 번 정하면 다른 사람이 못 써요
@@ -416,7 +425,7 @@ export default function LinkBoard() {
 
         <div id="main-screen" style={{ display: screen === "main" ? "block" : "none" }}>
           <div className="topbar">
-            <h1>에이블리 링크 보드</h1>
+            <h1>토스 아이디 링크 보드</h1>
             <div className="topbar-right">
               <div className="user">
                 나: <span id="my-nick-display">{myNickname}</span>
@@ -486,7 +495,7 @@ export default function LinkBoard() {
                   className="open-btn"
                   onClick={() => void openReceivedLink()}
                 >
-                  에이블리에서 열기 →
+                  토스에서 열기 →
                 </a>
                 <button className="return-btn" onClick={() => void returnLink()}>
                   반납하기
@@ -509,8 +518,8 @@ export default function LinkBoard() {
             <div className="guide-step">
               <div className="guide-num">1</div>
               <div className="guide-content">
-                <div className="title">에이블리에서 내 링크 복사하기</div>
-                <div className="desc">에이블리 앱에서 이벤트 링크를 새로 만들고 복사해요. 카카오톡으로 받은 메시지 전체를 복사해도 돼요!</div>
+                <div className="title">토스에서 내 링크 복사하기</div>
+                <div className="desc">토스 앱에서 아이디 링크를 만들고 복사해요. 카카오톡으로 받은 메시지 전체를 복사해도 돼요!</div>
               </div>
             </div>
             <div className="guide-step">
@@ -531,7 +540,7 @@ export default function LinkBoard() {
               <div className="guide-num">4</div>
               <div className="guide-content">
                 <div className="title">반복하면 응모 티켓이 쌓여요</div>
-                <div className="desc">에이블리에서 새 링크 만들고 → 올리고 → 받기. 이걸 반복하면 돼요!</div>
+                <div className="desc">토스에서 새 링크 만들고 → 올리고 → 받기. 이걸 반복하면 돼요!</div>
               </div>
             </div>
             <hr className="guide-divider" />
@@ -539,7 +548,7 @@ export default function LinkBoard() {
               <div className="notice-item">⚡ 동시에 눌러도 딱 1명만 받을 수 있어요</div>
               <div className="notice-item">🚫 한 사람 링크는 딱 1번만 받을 수 있어요</div>
               <div className="notice-item">⏱️ 5초 안에 안 누르면 자동으로 반납돼요</div>
-              <div className="notice-item">🔗 에이블리 링크(a-bly.com)만 올릴 수 있어요</div>
+              <div className="notice-item">🔗 토스 링크(toss.me)만 올릴 수 있어요</div>
               <div className="notice-item">🔄 내 링크를 대기열 맨 앞으로 다시 올릴 수 있어요</div>
             </div>
             <button className="dont-show-btn" onClick={dontShowAgain}>
@@ -561,20 +570,20 @@ export default function LinkBoard() {
         .topbar h1 { font-size: 16px; font-weight: 600; }
         .topbar-right { display: flex; align-items: center; gap: 10px; }
         .topbar .user { font-size: 12px; color: #888; }
-        .topbar .user span { color: #ff5a5f; font-weight: 600; }
+        .topbar .user span { color: #0064ff; font-weight: 700; }
         .help-btn { background: none; border: 1px solid #e0e0e0; border-radius: 20px; padding: 4px 10px; font-size: 12px; color: #888; cursor: pointer; }
         .section { padding: 16px 16px 0; }
         .card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 12px; border: 1px solid #ececec; }
         .card-title { font-size: 12px; color: #888; font-weight: 600; margin-bottom: 10px; letter-spacing: 0.03em; }
-        .paste-box { width: 100%; min-height: 72px; border-radius: 12px; border: 1.5px dashed #ffb3b5; background: #fff8f8; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; padding: 16px; user-select: none; }
-        .paste-box:active { background: #ffe8e8; border-color: #ff5a5f; transform: scale(0.98); }
+        .paste-box { width: 100%; min-height: 72px; border-radius: 12px; border: 1.5px dashed #9ec0ff; background: #f3f7ff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; padding: 16px; user-select: none; }
+        .paste-box:active { background: #e8f0ff; border-color: #0064ff; transform: scale(0.98); }
         .paste-box .icon { font-size: 22px; margin-bottom: 6px; }
-        .paste-box .hint { font-size: 13px; color: #ff5a5f; font-weight: 600; text-align: center; line-height: 1.5; }
+        .paste-box .hint { font-size: 13px; color: #0064ff; font-weight: 600; text-align: center; line-height: 1.5; }
         .paste-box .sub { font-size: 11px; color: #bbb; margin-top: 3px; text-align: center; }
         .requeue-btn { width: 100%; height: 40px; border-radius: 10px; background: #fff; border: 1px solid #ddd; color: #555; font-size: 13px; cursor: pointer; margin-top: 8px; display: none; }
         .requeue-btn:active { background: #f5f5f5; transform: scale(0.98); }
         .stat-single { background: #fff; border-radius: 14px; padding: 14px 16px; text-align: center; border: 1px solid #ececec; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
-        .stat-single .num { font-size: 22px; font-weight: 700; color: #ff5a5f; }
+        .stat-single .num { font-size: 22px; font-weight: 700; color: #0064ff; }
         .stat-single .lbl { font-size: 13px; color: #888; }
         .stat-single .refresh { font-size: 12px; color: #ccc; margin-left: 4px; }
         .alert { border-radius: 10px; padding: 11px 14px; font-size: 13px; margin-bottom: 12px; line-height: 1.6; margin-top: 8px; }
@@ -582,24 +591,24 @@ export default function LinkBoard() {
         .alert-danger { background: #fff0f0; color: #c0392b; }
         .alert-info { background: #eef4ff; color: #2355b0; }
         .alert-warning { background: #fff8e8; color: #b07800; }
-        #receive-btn { width: 100%; height: 64px; border-radius: 16px; font-size: 18px; font-weight: 700; background: #ff5a5f; color: #fff; border: none; cursor: pointer; transition: all 0.15s; box-shadow: 0 4px 16px rgba(255,90,95,0.25); margin-bottom: 12px; }
+        #receive-btn { width: 100%; height: 64px; border-radius: 16px; font-size: 18px; font-weight: 700; background: #0064ff; color: #fff; border: none; cursor: pointer; transition: all 0.15s; box-shadow: 0 4px 16px rgba(0,100,255,0.28); margin-bottom: 12px; }
         #receive-btn:active { transform: scale(0.97); }
         #receive-btn:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
-        .link-card { background: #fff; border-radius: 16px; padding: 20px 16px; border: 2px solid #ff5a5f; margin-bottom: 12px; }
+        .link-card { background: #fff; border-radius: 16px; padding: 20px 16px; border: 2px solid #0064ff; margin-bottom: 12px; }
         .link-card .label { font-size: 13px; color: #888; margin-bottom: 8px; }
         .link-url-box { font-size: 13px; color: #555; word-break: break-all; background: #f7f7f7; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
         .timer-wrap { text-align: center; margin-bottom: 14px; }
         .timer { font-size: 48px; font-weight: 700; color: #1a1a1a; line-height: 1; }
-        .timer.urgent { color: #ff5a5f; }
+        .timer.urgent { color: #0064ff; }
         .timer-sub { font-size: 12px; color: #999; margin-top: 4px; }
-        .open-btn { display: block; width: 100%; height: 52px; line-height: 52px; text-align: center; background: #ff5a5f; color: #fff; border-radius: 12px; font-size: 16px; font-weight: 700; text-decoration: none; margin-bottom: 10px; }
+        .open-btn { display: block; width: 100%; height: 52px; line-height: 52px; text-align: center; background: #0064ff; color: #fff; border-radius: 12px; font-size: 16px; font-weight: 700; text-decoration: none; margin-bottom: 10px; }
         .return-btn { width: 100%; height: 42px; border-radius: 10px; background: #f5f5f5; color: #888; border: none; font-size: 14px; cursor: pointer; }
         #nickname-screen { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px; background: #f5f5f7; }
         #nickname-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
         #nickname-screen p { font-size: 14px; color: #888; margin-bottom: 24px; text-align: center; line-height: 1.6; }
         #nickname-screen input { width: 100%; max-width: 320px; height: 48px; border-radius: 12px; border: 1.5px solid #e0e0e0; padding: 0 16px; font-size: 16px; outline: none; }
-        #nickname-screen input:focus { border-color: #ff5a5f; }
-        .start-btn { width: 100%; max-width: 320px; height: 48px; border-radius: 12px; background: #ff5a5f; color: #fff; border: none; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+        #nickname-screen input:focus { border-color: #0064ff; }
+        .start-btn { width: 100%; max-width: 320px; height: 48px; border-radius: 12px; background: #0064ff; color: #fff; border: none; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 12px; }
         #nick-error { color: #c0392b; font-size: 13px; margin-top: 8px; min-height: 18px; text-align: center; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
         .popup { background: #fff; border-radius: 24px 24px 0 0; padding: 24px 20px 36px; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; }
@@ -607,7 +616,7 @@ export default function LinkBoard() {
         .popup-header h2 { font-size: 18px; font-weight: 700; }
         .popup-close { background: #f0f0f0; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .guide-step { display: flex; gap: 14px; margin-bottom: 18px; align-items: flex-start; }
-        .guide-num { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; background: #ff5a5f; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+        .guide-num { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; background: #0064ff; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
         .guide-content .title { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
         .guide-content .desc { font-size: 13px; color: #777; line-height: 1.6; }
         .guide-divider { border: none; border-top: 1px solid #f0f0f0; margin: 20px 0; }

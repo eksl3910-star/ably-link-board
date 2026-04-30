@@ -13,13 +13,11 @@ function unauthorized() {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Protect the admin route with browser-managed Basic Auth.
-  // /admin 은 관리자만 접근 가능
-  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin/")) {
+  // Protect /admin and /api/admin/* with Basic Auth
+  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/api/admin" || pathname.startsWith("/api/admin/")) {
     const user = process.env.ADMIN_BASIC_USER ?? "";
     const pass = process.env.ADMIN_BASIC_PASS ?? "";
 
-    // 환경변수가 없으면 잠금 유지(실수로 공개 방지)
     if (!user || !pass) return unauthorized();
 
     const auth = req.headers.get("authorization");
@@ -27,14 +25,13 @@ export function middleware(req: NextRequest) {
 
     try {
       const b64 = auth.slice("Basic ".length);
-      // Middleware runs on the Edge Runtime on Vercel, so Node.js Buffer is unavailable.
+      // Edge Runtime: Buffer is unavailable.
       const decoded = atob(b64);
       const idx = decoded.indexOf(":");
       if (idx < 0) return unauthorized();
 
       const u = decoded.slice(0, idx);
       const p = decoded.slice(idx + 1);
-
       if (u !== user || p !== pass) return unauthorized();
     } catch {
       return unauthorized();
@@ -45,6 +42,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/api/admin/:path*"]
+  matcher: ["/admin", "/admin/:path*", "/api/admin", "/api/admin/:path*"]
 };
 
